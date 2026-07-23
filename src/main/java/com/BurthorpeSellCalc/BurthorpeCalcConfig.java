@@ -1,4 +1,4 @@
-package com.BurthorpeSellCalc;
+package net.runelite.client.plugins.burthorpesellcalc;
 
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
@@ -17,33 +17,41 @@ public interface BurthorpeCalcConfig extends Config {
 
     @ConfigItem(
             position = 1,
-            keyName = "defaultThreshold",
-            name = "Default Threshold (Sell 1)",
-            description = "Quantity required to trigger Cyan Sell 1 left-click priority"
+            keyName = "enableBankHighlight",
+            name = "Enable Bank Outline",
+            description = "Toggle the clean colored outline strokes on matching items inside your banking grid views"
     )
-    default int defaultThreshold() { return 1; }
+    default boolean enableBankHighlight() { return true; }
 
     @ConfigItem(
             position = 2,
-            keyName = "lowThreshold",
-            name = "Low Threshold (Sell 5)",
-            description = "Quantity required to trigger Green Sell 5 left-click priority"
+            keyName = "enableInventoryHighlight",
+            name = "Enable Inventory Outline",
+            description = "Toggle the clean colored outline strokes on matching items inside your player inventory slots"
     )
-    default int lowThreshold() { return 5; }
+    default boolean enableInventoryHighlight() { return true; }
 
     @ConfigItem(
             position = 3,
-            keyName = "mediumThreshold",
-            name = "Medium Threshold (Sell 10)",
-            description = "Quantity required to trigger Yellow Sell 10 left-click priority"
+            keyName = "shiftBankMenu",
+            name = "Shift Right Click Menu - Bank",
+            description = "Allow the custom configuration set choices when shift right-clicking items inside the bank vault"
     )
-    default int mediumThreshold() { return 10; }
+    default boolean shiftBankMenu() { return true; }
 
     @ConfigItem(
             position = 4,
-            keyName = "highThreshold",
-            name = "High Threshold (Sell 50)",
-            description = "Quantity required to trigger Red Sell 50 left-click priority"
+            keyName = "shiftInventoryMenu",
+            name = "Shift Right Click Menu - Inventory",
+            description = "Allow the custom configuration set choices when shift right-clicking items inside your player inventory"
     )
-    default int highThreshold() { return 50; }
+    default boolean shiftInventoryMenu() { return true; }
+
+    @ConfigItem(
+            position = 5,
+            keyName = "clearInclusionsToggle",
+            name = "Delete All Inclusions",
+            description = "Check this box to immediately clear all saved item listings from your tracking database"
+    )
+    default boolean clearInclusionsToggle() { return false; }
 }

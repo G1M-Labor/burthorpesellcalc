@@ -1,74 +1,72 @@
-package com.BurthorpeSellCalc;
+package net.runelite.client.plugins.burthorpesellcalc;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import javax.inject.Inject;
 import net.runelite.api.Client;
 import net.runelite.api.ItemContainer;
-import net.runelite.api.widgets.Widget;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.overlay.WidgetItemOverlay;
-
-import javax.inject.Inject;
-import java.awt.*;
 
 public class BurthorpeItemOverlay extends WidgetItemOverlay {
     private final Client client;
     private final BurthorpeCalcPlugin plugin;
     private final BurthorpeCalcConfig config;
-
-    private static final Color COLOR_DEFAULT = new Color(0, 255, 0, 45);    // Green (Default, < Low)
-    private static final Color COLOR_LOW = new Color(255, 127, 0, 55);      // Orange (Low, Sell 5)
-    private static final Color COLOR_MEDIUM = new Color(255, 0, 0, 55);     // Red (Medium, Sell 10)
-    private static final Color COLOR_HIGH = new Color(128, 0, 128, 65);     // Purple (High, Sell 50)
+    private final ItemManager itemManager;
 
     @Inject
-    public BurthorpeItemOverlay(Client client, BurthorpeCalcPlugin plugin, BurthorpeCalcConfig config) {
+    public BurthorpeItemOverlay(Client client, BurthorpeCalcPlugin plugin, BurthorpeCalcConfig config, ItemManager itemManager) {
         this.client = client;
         this.plugin = plugin;
         this.config = config;
+        this.itemManager = itemManager;
         showOnBank();
+        showOnInventory();
     }
 
     @Override
-    public void renderItemOverlay(Graphics2D graphics, int itemId, net.runelite.api.widgets.WidgetItem itemWidget) {
-        Widget bankWidget = client.getWidget(12, 0);
-        if (bankWidget == null || bankWidget.isHidden()) {
+    public void renderItemOverlay(Graphics2D graphics, int itemId, net.runelite.api.widgets.WidgetItem widgetItem) {
+        int canonicalId = itemManager.canonicalize(itemId);
+        if (!plugin.isItemIncluded(canonicalId)) {
             return;
         }
 
-        if (!plugin.isItemIncluded(itemId)) {
+        int packedWidgetId = widgetItem.getWidget().getId();
+        int widgetGroupId = packedWidgetId >> 16;
+        boolean isBankWidget = (widgetGroupId == 12);
+
+        if (isBankWidget && !config.enableBankHighlight()) {
+            return;
+        }
+        if (!isBankWidget && !config.enableInventoryHighlight()) {
             return;
         }
 
-        ItemContainer bankContainer = client.getItemContainer(95);
-        if (bankContainer == null) {
+        int containerId = isBankWidget ? 95 : 93;
+        ItemContainer container = client.getItemContainer(containerId);
+        if (container == null) {
             return;
         }
 
-        int totalQty = bankContainer.count(itemId);
-        if (totalQty <= 0) return;
-
-        Color paintColor = COLOR_DEFAULT;
-        Integer forcedBatch = plugin.getForcedBatchSize(itemId);
-
+        int batchSize = 1;
+        Integer forcedBatch = plugin.getForcedBatchSize(canonicalId);
         if (forcedBatch != null) {
-            if (forcedBatch == 50) {
-                paintColor = COLOR_HIGH;
-            } else if (forcedBatch == 10) {
-                paintColor = COLOR_MEDIUM;
-            } else if (forcedBatch == 5) {
-                paintColor = COLOR_LOW;
-            }
-        } else {
-            // Fixed the configuration lookups to match our strictly hardcoded numeric threshold tiers
-            if (totalQty >= config.highThreshold()) {
-                paintColor = COLOR_HIGH;
-            } else if (totalQty >= config.mediumThreshold()) {
-                paintColor = COLOR_MEDIUM;
-            } else if (totalQty >= config.lowThreshold()) {
-                paintColor = COLOR_LOW;
-            }
+            batchSize = forcedBatch;
         }
 
-        Rectangle bounds = itemWidget.getCanvasBounds();
-        graphics.setColor(paintColor);
-        graphics.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+        Color strokeColor;
+        switch (batchSize) {
+            case 1: strokeColor = Color.CYAN; break;
+            case 10: strokeColor = Color.YELLOW; break;
+            case 50: strokeColor = Color.RED; break;
+            case 5:
+            default: strokeColor = Color.GREEN; break;
+        }
+
+        BufferedImage itemOutlineImage = itemManager.getItemOutline(itemId, widgetItem.getQuantity(), strokeColor);
+        if (itemOutlineImage != null) {
+            graphics.drawImage(itemOutlineImage, widgetItem.getCanvasLocation().getX(), widgetItem.getCanvasLocation().getY(), null);
+        }
     }
 }

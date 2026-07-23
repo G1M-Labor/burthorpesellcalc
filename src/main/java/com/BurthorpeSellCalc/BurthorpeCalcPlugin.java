@@ -1,6 +1,11 @@
-package com.BurthorpeSellCalc;
+package net.runelite.client.plugins.burthorpesellcalc;
 
 import com.google.inject.Provides;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.MenuEntryAdded;
@@ -11,16 +16,11 @@ import net.runelite.api.widgets.Widget;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.game.ItemManager;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
-
-import javax.inject.Inject;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import net.runelite.client.game.ItemManager;
 
 @Slf4j
 @PluginDescriptor(
@@ -37,6 +37,7 @@ public class BurthorpeCalcPlugin extends Plugin {
     @Inject private BurthorpeItemOverlay itemOverlay;
     @Inject private EventBus eventBus;
     @Inject private BurthorpeMenuSwapper menuSwapper;
+    @Inject private ConfigManager configManager;
 
     private final Set<Integer> includedItems = new HashSet<>();
     private final Map<Integer, Integer> forcedSellTiers = new HashMap<>();
@@ -51,7 +52,6 @@ public class BurthorpeCalcPlugin extends Plugin {
     BurthorpeCalcConfig provideConfig(ConfigManager configManager) {
         return configManager.getConfig(BurthorpeCalcConfig.class);
     }
-
     @Override
     protected void startUp() throws Exception {
         loadInclusions();
@@ -68,39 +68,70 @@ public class BurthorpeCalcPlugin extends Plugin {
         log.info("Burthorpe Shop Calculator stopped!");
     }
 
-    public boolean isItemIncluded(int itemId) {
-        return includedItems.contains(itemId);
-    }
+    @Subscribe
+    public void onConfigChanged(ConfigChanged event) {
+        if (!event.getGroup().equals("burthorpesellcalc")) {
+            return;
+        }
 
-    public Integer getForcedBatchSize(int itemId) {
-        return forcedSellTiers.get(itemId);
-    }
+        if (event.getKey().equals("clearInclusionsToggle")) {
+            // FIXED EVALUATION LAYER: Checked the typed configuration interface method directly to clear out line 78 object casting errors
+            if (!config.clearInclusionsToggle()) {
+                return;
+            }
 
-    @Subscribe(priority = -2)
-    public void onScriptPostFired(ScriptPostFired event) {
-        if (event.getScriptId() == ScriptID.BANKMAIN_FINISHBUILDING) {
+            includedItems.clear();
+            forcedSellTiers.clear();
+            saveInclusions();
             updateBankTitleValue();
+            log.info("Burthorpe Calculator database immediately wiped via settings configuration toggle.");
+
+            configManager.setConfiguration("burthorpesellcalc", "clearInclusionsToggle", false);
         }
     }
 
-    private void updateBankTitleValue() {
+    public boolean isItemIncluded(int itemId) {
+        return includedItems.contains(itemManager.canonicalize(itemId));
+    }
+
+    public Integer getForcedBatchSize(int itemId) {
+        return forcedSellTiers.get(itemManager.canonicalize(itemId));
+    }
+
+    public void updateBankTitleValue() {
         Widget bankTitleWidget = client.getWidget(InterfaceID.Bankmain.TITLE);
         if (bankTitleWidget == null || bankTitleWidget.isHidden()) {
             return;
         }
 
         ItemContainer bankContainer = client.getItemContainer(95);
-        if (bankContainer == null) {
+        ItemContainer invContainer = client.getItemContainer(93);
+
+        long totalBankValue = calculateContainerValue(bankContainer);
+        long totalInvValue = calculateContainerValue(invContainer);
+
+        String nativeText = bankTitleWidget.getText();
+        if (nativeText == null || nativeText.isEmpty()) {
             return;
         }
 
-        long totalTabValue = 0;
-        Item[] items = bankContainer.getItems();
+        nativeText = nativeText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:[^)]+\\)\\s*\\(INV:[^)]+\\)</col>", "");
+        nativeText = nativeText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:[^<]+\\)</col>", "");
+        nativeText = nativeText.replaceAll("\\s*\\(SHOP:[^)]+\\)", "");
 
-        // Track the highest tier encountered across items in the tab to color the title context uniformly
-        int highestTierEncountered = 1;
+        String formattedShopStr = formatValue(totalBankValue);
+        String formattedInvStr = formatValue(totalInvValue);
 
-        for (Item item : items) {
+        String replacementString = " <col=ff981f>(SHOP: " + formattedShopStr + ") (INV: " + formattedInvStr + ")</col>";
+        bankTitleWidget.setText(nativeText + replacementString);
+    }
+    private long calculateContainerValue(ItemContainer container) {
+        if (container == null) {
+            return 0;
+        }
+
+        long totalValue = 0;
+        for (Item item : container.getItems()) {
             if (item == null || item.getId() <= 0 || item.getQuantity() <= 0) {
                 continue;
             }
@@ -110,56 +141,15 @@ public class BurthorpeCalcPlugin extends Plugin {
                 continue;
             }
 
-            int qty = item.getQuantity();
             int batchSize = SELL_AMOUNT_DEFAULT;
-
             Integer forcedBatch = getForcedBatchSize(itemId);
             if (forcedBatch != null) {
                 batchSize = forcedBatch;
-            } else if (qty >= config.highThreshold()) {
-                batchSize = SELL_AMOUNT_HIGH;
-            } else if (qty >= config.mediumThreshold()) {
-                batchSize = SELL_AMOUNT_MEDIUM;
-            } else if (qty >= config.lowThreshold()) {
-                batchSize = SELL_AMOUNT_LOW;
             }
 
-            if (batchSize > highestTierEncountered) {
-                highestTierEncountered = batchSize;
-            }
-
-            totalTabValue += calculateProjectedShopYield(itemId, qty, batchSize);
+            totalValue += calculateProjectedShopYield(itemId, item.getQuantity(), batchSize);
         }
-
-        String nativeText = bankTitleWidget.getText();
-        if (nativeText == null || nativeText.isEmpty()) {
-            return;
-        }
-
-        nativeText = nativeText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:[^<]+\\)</col>", "");
-        nativeText = nativeText.replaceAll("\\s*\\(SHOP:[^)]+\\)", "");
-
-        String formattedShopStr = formatValue(totalTabValue);
-
-        // Dynamically assign hex colors to your bank value text using your exact specifications
-        String tierColorHex;
-        switch (highestTierEncountered) {
-            case 5:
-                tierColorHex = "00ff00"; // Green
-                break;
-            case 10:
-                tierColorHex = "ffff00"; // Yellow
-                break;
-            case 50:
-                tierColorHex = "ff0000"; // Red
-                break;
-            case 1:
-            default:
-                tierColorHex = "00ffff"; // Cyan
-                break;
-        }
-
-        bankTitleWidget.setText(nativeText + " <col=" + tierColorHex + ">(SHOP: " + formattedShopStr + ")</col>");
+        return totalValue;
     }
 
     private String formatValue(long value) {
@@ -178,86 +168,86 @@ public class BurthorpeCalcPlugin extends Plugin {
         return String.valueOf(value);
     }
 
-    @Subscribe
-    public void onMenuEntryAdded(MenuEntryAdded event) {
-        Widget shopWidget = client.getWidget(301, 16);
-        if (shopWidget != null && !shopWidget.isHidden()) {
-            return;
-        }
-
-        Widget bankWidget = client.getWidget(12, 13);
-        if (bankWidget == null || bankWidget.isHidden()) {
-            return;
-        }
-
-        if (client.isKeyPressed(KeyCode.KC_SHIFT) && event.getOption().equals("Examine")) {
-            int itemId = event.getItemId();
-
-            if (isItemIncluded(itemId)) {
-                // FIXED: Changed exclusion layout options text to match Light Purple hex codes (#d8b4fe)
-                client.getMenu().createMenuEntry(-1)
-                        .setOption("<col=d8b4fe>Exclude from Shop</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
-                        .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId);
-            }
-
-            // Keep configuration choices synchronized with your primary layout hex sets
-            ItemContainer bank = client.getItemContainer(95);
-            int qty = bank != null ? bank.count(itemId) : 0;
-
-            String sell1Value = formatValue(calculateProjectedShopYield(itemId, qty, SELL_AMOUNT_DEFAULT));
-            String sell5Value = formatValue(calculateProjectedShopYield(itemId, qty, SELL_AMOUNT_LOW));
-            String sell10Value = formatValue(calculateProjectedShopYield(itemId, qty, SELL_AMOUNT_MEDIUM));
-            String sell50Value = formatValue(calculateProjectedShopYield(itemId, qty, SELL_AMOUNT_HIGH));
-
-            client.getMenu().createMenuEntry(-1)
-                    .setOption("<col=00ffff>Set (Sell " + SELL_AMOUNT_DEFAULT + ")</col> <col=ffffff>(" + sell1Value + ")</col>")
-                    .setTarget(event.getTarget())
-                    .setType(MenuAction.RUNELITE)
-                    .setIdentifier(event.getIdentifier())
-                    .setParam0(event.getActionParam0())
-                    .setParam1(event.getActionParam1())
-                    .setItemId(itemId)
-                    .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_DEFAULT));
-
-            client.getMenu().createMenuEntry(-1)
-                    .setOption("<col=00ff00>Set (Sell " + SELL_AMOUNT_LOW + ")</col> <col=ffffff>(" + sell5Value + ")</col>")
-                    .setTarget(event.getTarget())
-                    .setType(MenuAction.RUNELITE)
-                    .setIdentifier(event.getIdentifier())
-                    .setParam0(event.getActionParam0())
-                    .setParam1(event.getActionParam1())
-                    .setItemId(itemId)
-                    .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_LOW));
-
-            client.getMenu().createMenuEntry(-1)
-                    .setOption("<col=ffff00>Set (Sell " + SELL_AMOUNT_MEDIUM + ")</col> <col=ffffff>(" + sell10Value + ")</col>")
-                    .setTarget(event.getTarget())
-                    .setType(MenuAction.RUNELITE)
-                    .setIdentifier(event.getIdentifier())
-                    .setParam0(event.getActionParam0())
-                    .setParam1(event.getActionParam1())
-                    .setItemId(itemId)
-                    .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_MEDIUM));
-
-            client.getMenu().createMenuEntry(-1)
-                    .setOption("<col=ff0000>Set (Sell " + SELL_AMOUNT_HIGH + ")</col> <col=ffffff>(" + sell50Value + ")</col>")
-                    .setTarget(event.getTarget())
-                    .setType(MenuAction.RUNELITE)
-                    .setIdentifier(event.getIdentifier())
-                    .setParam0(event.getActionParam0())
-                    .setParam1(event.getActionParam1())
-                    .setItemId(itemId)
-                    .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_HIGH));
+    @Subscribe(priority = -2)
+    public void onScriptPostFired(ScriptPostFired event) {
+        if (event.getScriptId() == ScriptID.BANKMAIN_FINISHBUILDING) {
+            updateBankTitleValue();
         }
     }
 
+    @Subscribe
+    public void onMenuEntryAdded(MenuEntryAdded event) {
+        if (!client.isKeyPressed(KeyCode.KC_SHIFT) || event.getItemId() <= 0) {
+            return;
+        }
+
+        MenuEntry entry = event.getMenuEntry();
+        if (entry == null) {
+            return;
+        }
+
+        String option = event.getOption();
+        if (option == null) {
+            return;
+        }
+
+        boolean isBankVaultItem = entry.getType() == MenuAction.CC_OP_LOW_PRIORITY && option.contains("Value");
+        boolean isInventoryItem = option.equals("Examine");
+
+        boolean bankAllowed = isBankVaultItem && config.shiftBankMenu();
+        boolean inventoryAllowed = isInventoryItem && config.shiftInventoryMenu();
+
+        if (!bankAllowed && !inventoryAllowed) {
+            return;
+        }
+
+        MenuEntry[] existingEntries = client.getMenu().getMenuEntries();
+        if (existingEntries != null) {
+            for (MenuEntry existing : existingEntries) {
+                String existingOpt = existing.getOption();
+                if (existingOpt != null && (existingOpt.contains("Set (Sell -") || existingOpt.contains("Exclude from Shop"))) {
+                    return;
+                }
+            }
+        }
+
+        int itemId = itemManager.canonicalize(event.getItemId());
+
+        if (isItemIncluded(itemId)) {
+            client.getMenu().createMenuEntry(-1)
+                    .setOption("<col=d8b4fe>Exclude from Shop</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
+                    .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId);
+        }
+
+        client.getMenu().createMenuEntry(-1)
+                .setOption("<col=00ffff>Set (Sell - " + SELL_AMOUNT_DEFAULT + ")</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
+                .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
+                .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_DEFAULT));
+
+        client.getMenu().createMenuEntry(-1)
+                .setOption("<col=00ff00>Set (Sell - " + SELL_AMOUNT_LOW + ")</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
+                .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
+                .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_LOW));
+
+        client.getMenu().createMenuEntry(-1)
+                .setOption("<col=ffff00>Set (Sell - " + SELL_AMOUNT_MEDIUM + ")</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
+                .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
+                .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_MEDIUM));
+
+        client.getMenu().createMenuEntry(-1)
+                .setOption("<col=ff0000>Set (Sell - " + SELL_AMOUNT_HIGH + ")</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
+                .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
+                .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_HIGH));
+    }
+
     private void handleForceSelection(int itemId, int quantity) {
-        if (!includedItems.contains(itemId)) {
-            includedItems.add(itemId);
+        int canonicalId = itemManager.canonicalize(itemId);
+        if (!includedItems.contains(canonicalId)) {
+            includedItems.add(canonicalId);
             saveInclusions();
         }
 
-        forcedSellTiers.put(itemId, quantity);
+        forcedSellTiers.put(canonicalId, quantity);
         updateBankTitleValue();
     }
 
@@ -268,7 +258,7 @@ public class BurthorpeCalcPlugin extends Plugin {
         }
 
         if (event.getMenuOption().contains("Exclude from Shop")) {
-            int itemId = event.getItemId();
+            int itemId = itemManager.canonicalize(event.getItemId());
             includedItems.remove(itemId);
             forcedSellTiers.remove(itemId);
             saveInclusions();
@@ -281,4 +271,39 @@ public class BurthorpeCalcPlugin extends Plugin {
         StringBuilder sb = new StringBuilder();
         for (int id : includedItems) {
             sb.append(id).append(",");
-        }config.setIncludedItemIds(sb.toString());}private void loadInclusions() {includedItems.clear();String stored = config.includedItemIds();if (stored == null || stored.isEmpty()) return;for (String part : stored.split(",")) {if (!part.trim().isEmpty()) {try {includedItems.add(Integer.parseInt(part.trim()));} catch (NumberFormatException ignored) {}}}}public long calculateProjectedShopYield(int itemId, int totalQty, int sellBatchSize) {if (!isItemIncluded(itemId)) return 0;int highAlchPrice = itemManager.getItemComposition(itemId).getHaPrice();if (highAlchPrice <= 0) return 0;long totalCashYield = 0;int remainingItems = totalQty;while (remainingItems > 0) {int currentBatch = Math.min(remainingItems, sellBatchSize);for (int i = 0; i < currentBatch; i++) {double decayFactor = Math.max(0.0, 1.0 - (0.02 * i));totalCashYield += (long) Math.floor(highAlchPrice * decayFactor);}remainingItems -= currentBatch;}return totalCashYield;}}
+        }
+        config.setIncludedItemIds(sb.toString());
+    }
+
+    private void loadInclusions() {
+        includedItems.clear();
+        String stored = config.includedItemIds();
+        if (stored == null || stored.isEmpty()) return;
+        for (String part : stored.split(",")) {
+            if (!part.trim().isEmpty()) {
+                try {
+                    includedItems.add(Integer.parseInt(part.trim()));
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+    }
+
+    public long calculateProjectedShopYield(int itemId, int totalQty, int sellBatchSize) {
+        if (!isItemIncluded(itemId)) return 0;
+        int highAlchPrice = itemManager.getItemComposition(itemId).getHaPrice();
+        if (highAlchPrice <= 0) return 0;
+
+        long totalCashYield = 0;
+        int remainingItems = totalQty;
+
+        while (remainingItems > 0) {
+            int currentBatch = Math.min(remainingItems, sellBatchSize);
+            for (int i = 0; i < currentBatch; i++) {
+                double decayFactor = Math.max(0.0, 1.0 - (0.02 * i));
+                totalCashYield += (long) Math.floor(highAlchPrice * decayFactor);
+            }
+            remainingItems -= currentBatch;
+        }
+        return totalCashYield;
+    }
+}
