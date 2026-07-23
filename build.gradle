@@ -27,7 +27,7 @@ dependencies {
 	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
 }
 
-group = 'com.BurthorpeSellCalc'
+group = 'com.burthorpesellcalc'
 
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
