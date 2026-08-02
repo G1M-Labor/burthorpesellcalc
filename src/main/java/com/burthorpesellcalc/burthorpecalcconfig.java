@@ -6,52 +6,51 @@ import net.runelite.client.config.ConfigItem;
 
 @ConfigGroup("burthorpesellcalc")
 public interface burthorpecalcconfig extends Config {
-    @ConfigItem(
-            keyName = "includedItemIds",
-            name = "Included Items",
-            description = "Saved item IDs tracking inclusions list",
-            hidden = true
-    )
-    default String includedItemIds() { return ""; }
-    void setIncludedItemIds(String ids);
+
+    enum ValueFormatMode {
+        ROUNDED("Rounded"),
+        PRECISE("Precise");
+
+        private final String name;
+
+        ValueFormatMode(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String toString() {
+            return name;
+        }
+    }
 
     @ConfigItem(
-            position = 1,
-            keyName = "enableBankHighlight",
-            name = "Enable Bank Outline",
-            description = "Toggle the clean colored outline strokes on matching items inside your banking grid views"
+            keyName = "valueFormat",
+            name = "Value Format",
+            description = "Decide how gp values show within shift rightclick and your bank header",
+            position = 1
     )
-    default boolean enableBankHighlight() { return true; }
+    default ValueFormatMode valueFormat() {
+        return ValueFormatMode.ROUNDED;
+    }
 
-    @ConfigItem(
-            position = 2,
-            keyName = "enableInventoryHighlight",
-            name = "Enable Inventory Outline",
-            description = "Toggle the clean colored outline strokes on matching items inside your player inventory slots"
-    )
-    default boolean enableInventoryHighlight() { return true; }
-
-    @ConfigItem(
-            position = 3,
-            keyName = "shiftBankMenu",
-            name = "Shift Right Click Menu - Bank",
-            description = "Allow the custom configuration set choices when shift right-clicking items inside the bank vault"
-    )
+    @ConfigItem(keyName = "shiftBankMenu", name = "Shift Bank Menu", description = "", position = 2)
     default boolean shiftBankMenu() { return true; }
 
-    @ConfigItem(
-            position = 4,
-            keyName = "shiftInventoryMenu",
-            name = "Shift Right Click Menu - Inventory",
-            description = "Allow the custom configuration set choices when shift right-clicking items inside your player inventory"
-    )
+    @ConfigItem(keyName = "shiftInventoryMenu", name = "Shift Inventory Menu", description = "", position = 3)
     default boolean shiftInventoryMenu() { return true; }
 
-    @ConfigItem(
-            position = 5,
-            keyName = "clearInclusionsToggle",
-            name = "Delete All Inclusions",
-            description = "Check this box to immediately clear all saved item listings from your tracking database"
-    )
+    @ConfigItem(keyName = "enableBankHighlight", name = "Enable Bank Highlight", description = "", position = 4)
+    default boolean enableBankHighlight() { return true; }
+
+    @ConfigItem(keyName = "enableInventoryHighlight", name = "Enable Inventory Highlight", description = "", position = 5)
+    default boolean enableInventoryHighlight() { return true; }
+
+    @ConfigItem(keyName = "clearInclusionsToggle", name = "Clear Database", description = "", position = 6)
     default boolean clearInclusionsToggle() { return false; }
+
+    @ConfigItem(keyName = "includedItemIds", name = "", description = "", hidden = true)
+    default String includedItemIds() { return ""; }
+
+    @ConfigItem(keyName = "includedItemIds", name = "", description = "")
+    void setIncludedItemIds(String val);
 }
