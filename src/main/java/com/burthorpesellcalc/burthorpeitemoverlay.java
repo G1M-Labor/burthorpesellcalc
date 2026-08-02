@@ -5,7 +5,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import net.runelite.api.Client;
-import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetItem; // FIXED IMPORT: Swapped back to the modern required overlay reference type
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.overlay.WidgetItemOverlay;
 
@@ -25,14 +25,15 @@ public class burthorpeitemoverlay extends WidgetItemOverlay {
         showOnInventory();
     }
 
+    // FIXED OVERRIDE SIGNATURE: Updated the final parameter from Widget to WidgetItem to pass RuneLite core compilation checks
     @Override
-    public void renderItemOverlay(Graphics2D graphics, int itemId, Widget itemWidget) {
+    public void renderItemOverlay(Graphics2D graphics, int itemId, WidgetItem itemWidget) {
         int canonicalId = itemManager.canonicalize(itemId);
         if (!plugin.isItemIncluded(canonicalId)) {
             return;
         }
 
-        boolean isBank = itemWidget.getParent().getId() == 786445;
+        boolean isBank = itemWidget.getWidget().getParent().getId() == 786445;
         if (isBank && !config.enableBankHighlight()) {
             return;
         }
