@@ -1,11 +1,11 @@
-package com.github.g1mlabor.burthorpesellcalc;
+package com.burthorpesellcalc;
 
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 
 @ConfigGroup("burthorpesellcalc")
-public interface burthorpecalcconfig extends Config {
+public interface BurthorpeCalcConfig extends Config {
     @ConfigItem(
         keyName = "includedItemIds",
         name = "Included Items",
