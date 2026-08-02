@@ -5,7 +5,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import net.runelite.api.Client;
-import net.runelite.api.widgets.WidgetItem; // FIXED IMPORT: Swapped back to the modern required overlay reference type
+import net.runelite.api.widgets.WidgetItem;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.overlay.WidgetItemOverlay;
 
@@ -25,7 +25,6 @@ public class burthorpeitemoverlay extends WidgetItemOverlay {
         showOnInventory();
     }
 
-    // FIXED OVERRIDE SIGNATURE: Updated the final parameter from Widget to WidgetItem to pass RuneLite core compilation checks
     @Override
     public void renderItemOverlay(Graphics2D graphics, int itemId, WidgetItem itemWidget) {
         int canonicalId = itemManager.canonicalize(itemId);
@@ -41,7 +40,8 @@ public class burthorpeitemoverlay extends WidgetItemOverlay {
             return;
         }
 
-        Rectangle bounds = itemWidget.getBounds();
+        // FIXED INTERFACE CALL: Swapped out broken .getBounds() for the required .getCanvasBounds() method parameter loop
+        Rectangle bounds = itemWidget.getCanvasBounds();
         if (bounds == null) {
             return;
         }
