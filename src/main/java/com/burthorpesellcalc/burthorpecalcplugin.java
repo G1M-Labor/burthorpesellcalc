@@ -29,16 +29,15 @@ import net.runelite.client.game.ItemManager;
     tags = {"bank", "shop", "money", "calc", "ironman"}
 )
 @SuppressWarnings("deprecation")
-// FIXED SIGNATURE: Cleaned capitalization to strict lowercase parameters to fix compilation errors
-public class burthorpecalcplugin extends Plugin {
+public class BurthorpeCalcPlugin extends Plugin {
 
     @Inject private Client client;
-    @Inject private burthorpecalcconfig config; // FIXED: Lowercase mapping parameters
+    @Inject private BurthorpeCalcConfig config;
     @Inject private ItemManager itemManager;
     @Inject private OverlayManager overlayManager;
-    @Inject private burthorpeitemoverlay itemOverlay; // FIXED: Lowercase mapping parameters
+    @Inject private BurthorpeItemOverlay itemOverlay;
     @Inject private EventBus eventBus;
-    @Inject private burthorpemenuswapper menuSwapper; // FIXED: Lowercase mapping parameters
+    @Inject private BurthorpeMenuSwapper menuSwapper;
     @Inject private ConfigManager configManager;
 
     private final Set<Integer> includedItems = new HashSet<>();
@@ -54,8 +53,8 @@ public class burthorpecalcplugin extends Plugin {
 
     @Provides
     @SuppressWarnings("unused")
-    burthorpecalcconfig provideConfig(ConfigManager configManager) { // FIXED: Lowercase return type
-        return configManager.getConfig(burthorpecalcconfig.class); // FIXED: Lowercase target configuration
+    BurthorpeCalcConfig provideConfig(ConfigManager configManager) {
+        return configManager.getConfig(BurthorpeCalcConfig.class);
     }
     @Override
     protected void startUp() throws Exception {
@@ -238,7 +237,7 @@ public class burthorpecalcplugin extends Plugin {
     }
 
     private String resolveDynamicMenuText(long yieldValue) {
-        if (config.menuValueDisplayMode() == burthorpecalcconfig.MenuValueFormat.ROUNDED) { // FIXED: Lowercase configuration reference
+        if (config.menuValueDisplayMode() == BurthorpeCalcConfig.MenuValueFormat.ROUNDED) {
             return formatValue(yieldValue);
         }
         return String.format("%,d gp", yieldValue);
