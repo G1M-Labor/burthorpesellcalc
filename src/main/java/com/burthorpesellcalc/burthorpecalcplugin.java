@@ -18,7 +18,9 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 
 import javax.inject.Inject;
+import java.text.NumberFormat;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -43,10 +45,10 @@ public class burthorpecalcplugin extends Plugin {
     private final Set<Integer> includedItems = new HashSet<>();
     private final Map<Integer, Integer> forcedSellTiers = new HashMap<>();
 
-    private static final int SELL_AMOUNT_DEFAULT = 1;
-    private static final int SELL_AMOUNT_LOW = 5;
-    private static final int SELL_AMOUNT_MEDIUM = 10;
-    private static final int SELL_AMOUNT_HIGH = 50;
+    public static final int SELL_AMOUNT_DEFAULT = 1;
+    public static final int SELL_AMOUNT_LOW = 5;
+    public static final int SELL_AMOUNT_MEDIUM = 10;
+    public static final int SELL_AMOUNT_HIGH = 50;
     public static final int SELL_AMOUNT_ALL = -1;
 
     @Provides
@@ -88,6 +90,10 @@ public class burthorpecalcplugin extends Plugin {
             log.info("Burthorpe Calculator database immediately wiped via settings configuration toggle.");
 
             configManager.setConfiguration("burthorpesellcalc", "clearInclusionsToggle", false);
+        }
+
+        if (event.getKey().equals("valueFormat")) {
+            updateBankTitleValue();
         }
     }
 
@@ -170,15 +176,19 @@ public class burthorpecalcplugin extends Plugin {
             }
 
             if (batchSize == SELL_AMOUNT_ALL) {
-                batchSize = item.getQuantity();
+                totalValue += calculateProjectedShopYield(itemId, item.getQuantity(), item.getQuantity());
+            } else {
+                totalValue += calculateProjectedShopYield(itemId, item.getQuantity(), batchSize);
             }
-
-            totalValue += calculateProjectedShopYield(itemId, item.getQuantity(), batchSize);
         }
         return totalValue;
     }
 
     public String formatValue(long value) {
+        if (config.valueFormat() == burthorpecalcconfig.ValueFormatMode.PRECISE) {
+            return NumberFormat.getNumberInstance(Locale.US).format(value);
+        }
+
         if (value >= 1_000_000_000) {
             long truncated = value / 100_000_000;
             return (truncated / 10.0) + "B";
@@ -203,20 +213,29 @@ public class burthorpecalcplugin extends Plugin {
 
     public long calculateProjectedShopYield(int itemId, int totalQty, int sellBatchSize) {
         if (!isItemIncluded(itemId)) return 0;
-        int highAlchPrice = itemManager.getItemComposition(itemId).getHaPrice();
-        if (highAlchPrice <= 0) return 0;
+        ItemComposition comp = itemManager.getItemComposition(itemId);
+        int highAlchPrice = comp.getHaPrice();
+        int baseStoreValue = comp.getPrice();
+        if (highAlchPrice <= 0 || baseStoreValue <= 0) return 0;
 
         long totalCashYield = 0;
         int remainingItems = totalQty;
 
-        double minimumFloorFactor = 1.0 / 6.0;
+        int minimumFloorPrice = (int) Math.floor(baseStoreValue * 0.10);
 
         while (remainingItems > 0) {
             int currentBatch = Math.min(remainingItems, sellBatchSize);
+
             for (int i = 0; i < currentBatch; i++) {
-                double decayFactor = Math.max(minimumFloorFactor, 1.0 - (0.02 * i));
-                totalCashYield += (long) Math.floor(highAlchPrice * decayFactor);
+                int decayedItemPrice = highAlchPrice - (int) Math.floor(i * 0.02 * baseStoreValue);
+
+                if (decayedItemPrice < minimumFloorPrice) {
+                    decayedItemPrice = minimumFloorPrice;
+                }
+
+                totalCashYield += decayedItemPrice;
             }
+
             remainingItems -= currentBatch;
         }
         return totalCashYield;
@@ -345,4 +364,4 @@ public class burthorpecalcplugin extends Plugin {
             event.consume();
         }
     }
-}
+} // BRACKET FIX: Main plugin class now explicitly closes here at the very end of the file
