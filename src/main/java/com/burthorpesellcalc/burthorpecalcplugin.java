@@ -1,4 +1,4 @@
-package net.runelite.client.plugins.burthorpesellcalc;
+package com.github.g1mlabor.burthorpesellcalc;
 
 import com.google.inject.Provides;
 import java.util.HashMap;
@@ -12,7 +12,6 @@ import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.events.GameTick;
-import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
@@ -25,10 +24,11 @@ import net.runelite.client.game.ItemManager;
 
 @Slf4j
 @PluginDescriptor(
-        name = "Burthorpe Shop Calculator",
-        description = "Calculates shop sale yields and appends values seamlessly to the bank title text natively",
-        tags = {"bank", "shop", "money", "calc", "ironman"}
+    name = "Burthorpe Shop Calculator",
+    description = "Calculates shop sale yields and appends values seamlessly to the bank title text natively",
+    tags = {"bank", "shop", "money", "calc", "ironman"}
 )
+@SuppressWarnings("deprecation")
 public class burthorpecalcplugin extends Plugin {
 
     @Inject private Client client;
@@ -92,9 +92,7 @@ public class burthorpecalcplugin extends Plugin {
         }
 
         Widget shopGrid = client.getWidget(301, 16);
-        boolean is301Grid = (shopGrid != null && !shopGrid.isHidden());
-
-        if (!is301Grid) {
+        if (shopGrid == null || shopGrid.isHidden()) {
             shopGrid = client.getWidget(300, 16);
         }
         boolean isShopOpen = (shopGrid != null && !shopGrid.isHidden());
@@ -122,12 +120,10 @@ public class burthorpecalcplugin extends Plugin {
         if (!currentTickStock.equals(shopItemsWithStockCache)) {
             for (int id : shopItemsWithStockCache) {
                 if (!currentTickStock.contains(id)) {
-                    if (worldSoldItemIds.contains(id)) {
-                        worldSoldItemIds.remove(id);
-                    }
+                    worldSoldItemIds.remove(id);
                 }
             }
-
+            
             shopItemsWithStockCache.clear();
             shopItemsWithStockCache.addAll(currentTickStock);
             updateBankTitleValue();
@@ -137,7 +133,6 @@ public class burthorpecalcplugin extends Plugin {
     public boolean isCachedShopStockPresent(int canonicalId) {
         return shopItemsWithStockCache.contains(canonicalId);
     }
-
     @Subscribe
     public void onConfigChanged(ConfigChanged event) {
         if (!event.getGroup().equals("burthorpesellcalc")) {
@@ -165,8 +160,9 @@ public class burthorpecalcplugin extends Plugin {
     public Integer getForcedBatchSize(int itemId) {
         return forcedSellTiers.get(itemManager.canonicalize(itemId));
     }
+
     public void updateBankTitleValue() {
-        Widget bankTitleWidget = client.getWidget(InterfaceID.Bankmain.TITLE);
+        Widget bankTitleWidget = client.getWidget(12, 15);
         if (bankTitleWidget == null || bankTitleWidget.isHidden()) {
             return;
         }
@@ -182,9 +178,9 @@ public class burthorpecalcplugin extends Plugin {
             return;
         }
 
-        nativeText = nativeText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:[^)]+\\)\\s*\\(INV:[^)]+\\)</col>", "");
-        nativeText = nativeText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:[^<]+\\)</col>", "");
-        nativeText = nativeText.replaceAll("\\s*\\(SHOP:[^)]+\\)", "");
+        nativeText = nativeText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:\\s*[^)]+\\)\\s*\\(INV:\\s*[^)]+\\)</col>", "");
+        nativeText = nativeText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:\\s*[^<]+\\)</col>", "");
+        nativeText = nativeText.replaceAll("\\s*\\(SHOP:\\s*[^)]+\\)", "");
 
         String formattedShopStr = formatValue(totalBankValue);
         String formattedInvStr = formatValue(totalInvValue);
@@ -264,21 +260,20 @@ public class burthorpecalcplugin extends Plugin {
             return;
         }
 
-        String option = event.getOption();
-        if (option == null) {
-            return;
-        }
-
         int packedWidgetId = entry.getParam1();
         int widgetGroupId = packedWidgetId >> 16;
 
         boolean isBankVaultItem = (widgetGroupId == 12);
         boolean isInventoryItem = (widgetGroupId == 15 || widgetGroupId == 300 || widgetGroupId == 301);
 
-        boolean bankAllowed = isBankVaultItem && config.shiftBankMenu();
-        boolean inventoryAllowed = isInventoryItem && config.shiftInventoryMenu();
+        if (!isBankVaultItem && !isInventoryItem) {
+            return;
+        }
 
-        if (!bankAllowed && !inventoryAllowed) {
+        if (isBankVaultItem && !config.shiftBankMenu()) {
+            return;
+        }
+        if (isInventoryItem && !config.shiftInventoryMenu()) {
             return;
         }
 
@@ -293,7 +288,7 @@ public class burthorpecalcplugin extends Plugin {
         }
 
         int itemId = itemManager.canonicalize(event.getItemId());
-
+        
         int containerId = isBankVaultItem ? 95 : 93;
         ItemContainer targetContainer = client.getItemContainer(containerId);
         int itemStackQuantity = 1;
@@ -303,49 +298,48 @@ public class burthorpecalcplugin extends Plugin {
 
         if (isItemIncluded(itemId)) {
             client.getMenu().createMenuEntry(-1)
-                    .setOption("<col=ff0000>Exclude from Shop</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
-                    .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId);
+                .setOption("<col=ff0000>Exclude from Shop</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
+                .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId);
         }
 
-        String yield1 = resolveDynamicMenuText(calculateMenuDisplayYield(itemId, itemStackQuantity, SELL_AMOUNT_DEFAULT));
-        String yield5 = resolveDynamicMenuText(calculateMenuDisplayYield(itemId, itemStackQuantity, SELL_AMOUNT_LOW));
-        String yield10 = resolveDynamicMenuText(calculateMenuDisplayYield(itemId, itemStackQuantity, SELL_AMOUNT_MEDIUM));
-        String yield50 = resolveDynamicMenuText(calculateMenuDisplayYield(itemId, itemStackQuantity, SELL_AMOUNT_HIGH));
-        String yieldAll = resolveDynamicMenuText(calculateContinuousAllYield(itemId, itemStackQuantity));
+        long baselineVolumeCount = itemStackQuantity;
+        String yieldAll = resolveDynamicMenuText(calculateContinuousAllYield(itemId, baselineVolumeCount));
+        String yield50 = resolveDynamicMenuText(calculateMenuDisplayYield(itemId, baselineVolumeCount, SELL_AMOUNT_HIGH));
+        String yield10 = resolveDynamicMenuText(calculateMenuDisplayYield(itemId, baselineVolumeCount, SELL_AMOUNT_MEDIUM));
+        String yield5 = resolveDynamicMenuText(calculateMenuDisplayYield(itemId, baselineVolumeCount, SELL_AMOUNT_LOW));
+        String yield1 = resolveDynamicMenuText(calculateMenuDisplayYield(itemId, baselineVolumeCount, SELL_AMOUNT_DEFAULT));
 
         client.getMenu().createMenuEntry(-1)
-                .setOption("<col=d8b4fe>Set (Sell - All)</col> <col=ff981f>[" + yieldAll + "]</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
-                .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
-                .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_ALL_MARKER));
+            .setOption("<col=d8b4fe>Set (Sell - All)</col> <col=ff981f>[" + yieldAll + "]</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
+            .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
+            .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_ALL_MARKER));
 
         client.getMenu().createMenuEntry(-1)
-                .setOption("<col=ff981f>Set (Sell - 50)</col> <col=ff981f>[" + yield50 + "]</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
-                .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
-                .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_HIGH));
+            .setOption("<col=ff981f>Set (Sell - 50)</col> <col=ff981f>[" + yield50 + "]</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
+            .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
+            .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_HIGH));
 
         client.getMenu().createMenuEntry(-1)
-                .setOption("<col=ffff00>Set (Sell - 10)</col> <col=ff981f>[" + yield10 + "]</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
-                .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
-                .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_MEDIUM));
+            .setOption("<col=ffff00>Set (Sell - 10)</col> <col=ff981f>[" + yield10 + "]</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
+            .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
+            .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_MEDIUM));
 
         client.getMenu().createMenuEntry(-1)
-                .setOption("<col=00ff00>Set (Sell - 5)</col> <col=ff981f>[" + yield5 + "]</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
-                .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
-                .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_LOW));
+            .setOption("<col=00ff00>Set (Sell - 5)</col> <col=ff981f>[" + yield5 + "]</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
+            .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
+            .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_LOW));
 
         client.getMenu().createMenuEntry(-1)
-                .setOption("<col=00ffff>Set (Sell - 1)</col> <col=ff981f>[" + yield1 + "]</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
-                .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
-                .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_DEFAULT));
+            .setOption("<col=00ffff>Set (Sell - 1)</col> <col=ff981f>[" + yield1 + "]</col>").setTarget(event.getTarget()).setType(MenuAction.RUNELITE)
+            .setIdentifier(event.getIdentifier()).setParam0(event.getActionParam0()).setParam1(event.getActionParam1()).setItemId(itemId)
+            .onClick(e -> handleForceSelection(itemId, SELL_AMOUNT_DEFAULT));
     }
 
     private void handleForceSelection(int itemId, int quantity) {
         int canonicalId = itemManager.canonicalize(itemId);
-        if (!includedItems.contains(canonicalId)) {
-            includedItems.add(canonicalId);
-            saveInclusions();
-        }
-
+        includedItems.add(canonicalId);
+        saveInclusions();
+        
         forcedSellTiers.put(canonicalId, quantity);
         updateBankTitleValue();
     }
@@ -387,7 +381,7 @@ public class burthorpecalcplugin extends Plugin {
         }
     }
 
-    private long calculateContinuousAllYield(int itemId, int totalQty) {
+    private long calculateContinuousAllYield(int itemId, long totalQty) {
         int highAlchPrice = itemManager.getItemComposition(itemId).getHaPrice();
         if (highAlchPrice <= 0) return 0;
 
@@ -397,7 +391,7 @@ public class burthorpecalcplugin extends Plugin {
         for (int i = 0; i < totalQty; i++) {
             double decayFactor = 1.0 - (0.02 * i);
             long singleItemValue = (long) Math.floor(highAlchPrice * decayFactor);
-
+            
             if (singleItemValue < priceFloorLimit) {
                 singleItemValue = priceFloorLimit;
             }
@@ -406,20 +400,20 @@ public class burthorpecalcplugin extends Plugin {
         return totalCashYield;
     }
 
-    private long calculateMenuDisplayYield(int itemId, int totalQty, int sellBatchSize) {
+    private long calculateMenuDisplayYield(int itemId, long totalQty, int sellBatchSize) {
         int highAlchPrice = itemManager.getItemComposition(itemId).getHaPrice();
         if (highAlchPrice <= 0) return 0;
 
         long totalCashYield = 0;
-        int remainingItems = totalQty;
+        long remainingItems = totalQty;
         long priceFloorLimit = (long) Math.floor(highAlchPrice * 0.10);
 
         while (remainingItems > 0) {
-            int currentBatch = Math.min(remainingItems, sellBatchSize);
+            long currentBatch = Math.min(remainingItems, sellBatchSize);
             for (int i = 0; i < currentBatch; i++) {
                 double decayFactor = 1.0 - (0.02 * i);
                 long singleItemValue = (long) Math.floor(highAlchPrice * decayFactor);
-
+                
                 if (singleItemValue < priceFloorLimit) {
                     singleItemValue = priceFloorLimit;
                 }
