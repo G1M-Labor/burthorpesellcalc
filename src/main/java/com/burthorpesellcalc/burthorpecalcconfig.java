@@ -5,7 +5,7 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 
 @ConfigGroup("burthorpesellcalc")
-public interface BurthorpeCalcConfig extends Config {
+public interface burthorpecalcconfig extends Config {
     @ConfigItem(
         keyName = "includedItemIds",
         name = "Included Items",
