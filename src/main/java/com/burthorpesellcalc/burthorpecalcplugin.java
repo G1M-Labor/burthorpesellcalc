@@ -29,15 +29,15 @@ import net.runelite.client.game.ItemManager;
     tags = {"bank", "shop", "money", "calc", "ironman"}
 )
 @SuppressWarnings("deprecation")
-public class BurthorpeCalcPlugin extends Plugin {
+public class burthorpecalcplugin extends Plugin {
 
     @Inject private Client client;
-    @Inject private BurthorpeCalcConfig config;
+    @Inject private burthorpecalcconfig config;
     @Inject private ItemManager itemManager;
     @Inject private OverlayManager overlayManager;
-    @Inject private BurthorpeItemOverlay itemOverlay;
+    @Inject private burthorpeitemoverlay itemOverlay;
     @Inject private EventBus eventBus;
-    @Inject private BurthorpeMenuSwapper menuSwapper;
+    @Inject private burthorpemenuswapper menuSwapper;
     @Inject private ConfigManager configManager;
 
     private final Set<Integer> includedItems = new HashSet<>();
@@ -53,8 +53,8 @@ public class BurthorpeCalcPlugin extends Plugin {
 
     @Provides
     @SuppressWarnings("unused")
-    BurthorpeCalcConfig provideConfig(ConfigManager configManager) {
-        return configManager.getConfig(BurthorpeCalcConfig.class);
+    burthorpecalcconfig provideConfig(ConfigManager configManager) {
+        return configManager.getConfig(burthorpecalcconfig.class);
     }
     @Override
     protected void startUp() throws Exception {
@@ -237,7 +237,7 @@ public class BurthorpeCalcPlugin extends Plugin {
     }
 
     private String resolveDynamicMenuText(long yieldValue) {
-        if (config.menuValueDisplayMode() == BurthorpeCalcConfig.MenuValueFormat.ROUNDED) {
+        if (config.menuValueDisplayMode() == burthorpecalcconfig.MenuValueFormat.ROUNDED) {
             return formatValue(yieldValue);
         }
         return String.format("%,d gp", yieldValue);
