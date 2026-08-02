@@ -1,4 +1,5 @@
-package com.github.g1mlabor.burthorpesellcalc;
+// FIXED PACKAGE DIRECTORY: Shifted package definitions to align exactly with your online com.burthorpesellcalc folder pathway
+package com.burthorpesellcalc;
 
 import com.google.inject.Provides;
 import java.util.HashMap;
