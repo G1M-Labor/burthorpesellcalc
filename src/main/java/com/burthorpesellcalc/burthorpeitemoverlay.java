@@ -9,14 +9,14 @@ import net.runelite.api.widgets.Widget;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.overlay.WidgetItemOverlay;
 
-public class BurthorpeItemOverlay extends WidgetItemOverlay {
+public class burthorpeitemoverlay extends WidgetItemOverlay {
     private final Client client;
-    private final BurthorpeCalcPlugin plugin;
-    private final BurthorpeCalcConfig config;
+    private final burthorpecalcplugin plugin;
+    private final burthorpecalcconfig config;
     private final ItemManager itemManager;
 
     @Inject
-    public BurthorpeItemOverlay(Client client, BurthorpeCalcPlugin plugin, BurthorpeCalcConfig config, ItemManager itemManager) {
+    public burthorpeitemoverlay(Client client, burthorpecalcplugin plugin, burthorpecalcconfig config, ItemManager itemManager) {
         this.client = client;
         this.plugin = plugin;
         this.config = config;
@@ -32,7 +32,7 @@ public class BurthorpeItemOverlay extends WidgetItemOverlay {
             return;
         }
 
-        boolean isBank = itemWidget.getParent().getId() == 786445; // Group ID for Bank main grid
+        boolean isBank = itemWidget.getParent().getId() == 786445;
         if (isBank && !config.enableBankHighlight()) {
             return;
         }
@@ -45,7 +45,7 @@ public class BurthorpeItemOverlay extends WidgetItemOverlay {
             return;
         }
 
-        graphics.setColor(new Color(255, 152, 31, 180)); // Soft orange highlight stroke
+        graphics.setColor(new Color(255, 152, 31, 180));
         graphics.drawRect(bounds.x, bounds.y, bounds.width - 1, bounds.height - 1);
     }
 }
