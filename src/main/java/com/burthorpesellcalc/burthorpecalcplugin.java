@@ -105,22 +105,39 @@ public class burthorpecalcplugin extends Plugin {
         return forcedSellTiers.get(itemManager.canonicalize(itemId));
     }
 
+    // PERSISTENCE STORAGE FIX: Key-Value pairs serialized down to disk via colon delimiter parsing formats
     private void saveInclusions() {
         StringBuilder sb = new StringBuilder();
         for (int id : includedItems) {
-            sb.append(id).append(",");
+            int tierValue = forcedSellTiers.getOrDefault(id, SELL_AMOUNT_DEFAULT);
+            sb.append(id).append(":").append(tierValue).append(",");
         }
         config.setIncludedItemIds(sb.toString());
     }
 
+    // PERSISTENCE RECOVERY FIX: String splits extract sub-parameters out to populate both hash fields simultaneously
     private void loadInclusions() {
         includedItems.clear();
+        forcedSellTiers.clear();
         String stored = config.includedItemIds();
         if (stored == null || stored.isEmpty()) return;
-        for (String part : stored.split(",")) {
-            if (!part.trim().isEmpty()) {
+
+        for (String entry : stored.split(",")) {
+            if (!entry.trim().isEmpty()) {
                 try {
-                    includedItems.add(Integer.parseInt(part.trim()));
+                    if (entry.contains(":")) {
+                        String[] parts = entry.split(":");
+                        int itemId = Integer.parseInt(parts[0].trim());
+                        int tierValue = Integer.parseInt(parts[1].trim());
+
+                        includedItems.add(itemId);
+                        forcedSellTiers.put(itemId, tierValue);
+                    } else {
+                        // Legacy support layer in case old data exists
+                        int itemId = Integer.parseInt(entry.trim());
+                        includedItems.add(itemId);
+                        forcedSellTiers.put(itemId, SELL_AMOUNT_DEFAULT);
+                    }
                 } catch (NumberFormatException ignored) {}
             }
         }
@@ -293,7 +310,9 @@ public class burthorpecalcplugin extends Plugin {
 
         boolean naturallyIncluded = isItemIncluded(itemId);
         if (!naturallyIncluded) {
+            // Temporary insertion map allocations to build contextual menu yields cleanly
             includedItems.add(itemId);
+            forcedSellTiers.put(itemId, SELL_AMOUNT_DEFAULT);
         }
 
         String yieldDefaultStr = formatValue(calculateProjectedShopYield(itemId, totalStackQuantity, SELL_AMOUNT_DEFAULT));
@@ -304,6 +323,7 @@ public class burthorpecalcplugin extends Plugin {
 
         if (!naturallyIncluded) {
             includedItems.remove(itemId);
+            forcedSellTiers.remove(itemId);
         }
 
         if (naturallyIncluded) {
@@ -340,12 +360,12 @@ public class burthorpecalcplugin extends Plugin {
 
     private void handleForceSelection(int itemId, int quantity) {
         int canonicalId = itemManager.canonicalize(itemId);
-        if (!includedItems.contains(canonicalId)) {
-            includedItems.add(canonicalId);
-            saveInclusions();
-        }
 
+        // INTERACTION REGISTRATION FIX: Data mapped out ahead of the save configuration pipelines
+        includedItems.add(canonicalId);
         forcedSellTiers.put(canonicalId, quantity);
+
+        saveInclusions();
         updateBankTitleValue();
     }
 
@@ -364,4 +384,4 @@ public class burthorpecalcplugin extends Plugin {
             event.consume();
         }
     }
-} // BRACKET FIX: Main plugin class now explicitly closes here at the very end of the file
+}
