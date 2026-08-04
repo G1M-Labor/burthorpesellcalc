@@ -6,6 +6,7 @@ import net.runelite.api.*;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.ScriptPostFired;
+import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.config.ConfigManager;
@@ -45,6 +46,9 @@ public class burthorpecalcplugin extends Plugin {
     private final Set<Integer> includedItems = new HashSet<>();
     private final Map<Integer, Integer> forcedSellTiers = new HashMap<>();
 
+    // Stable cache register mirrors native Bank plugin value rendering flow [source: 2]
+    private String cachedShopTextStr = "";
+
     public static final int SELL_AMOUNT_DEFAULT = 1;
     public static final int SELL_AMOUNT_LOW = 5;
     public static final int SELL_AMOUNT_MEDIUM = 10;
@@ -61,6 +65,7 @@ public class burthorpecalcplugin extends Plugin {
         loadInclusions();
         overlayManager.add(itemOverlay);
         eventBus.register(menuSwapper);
+        syncAllIncludedTags();
         log.info("Burthorpe Shop Calculator started!");
     }
 
@@ -69,6 +74,14 @@ public class burthorpecalcplugin extends Plugin {
         overlayManager.remove(itemOverlay);
         eventBus.unregister(menuSwapper);
         forcedSellTiers.clear();
+        cachedShopTextStr = "";
+
+        Widget bankTitleWidget = client.getWidget(InterfaceID.Bankmain.TITLE);
+        if (bankTitleWidget != null && bankTitleWidget.getText() != null) {
+            String nativeText = bankTitleWidget.getText();
+            nativeText = nativeText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:[^)]+\\)\\s*\\(INV:[^)]+\\)</col>", "");
+            bankTitleWidget.setText(nativeText);
+        }
         log.info("Burthorpe Shop Calculator stopped!");
     }
 
@@ -83,16 +96,22 @@ public class burthorpecalcplugin extends Plugin {
                 return;
             }
 
+            if (configManager != null) {
+                for (int id : includedItems) {
+                    removeShopscapeTag(id);
+                }
+            }
+
             includedItems.clear();
             forcedSellTiers.clear();
             saveInclusions();
+            recomputePricesCache();
             updateBankTitleValue();
-            log.info("Burthorpe Calculator database immediately wiped via settings configuration toggle.");
-
             configManager.setConfiguration("burthorpesellcalc", "clearInclusionsToggle", false);
         }
 
         if (event.getKey().equals("valueFormat")) {
+            recomputePricesCache();
             updateBankTitleValue();
         }
     }
@@ -105,7 +124,6 @@ public class burthorpecalcplugin extends Plugin {
         return forcedSellTiers.get(itemManager.canonicalize(itemId));
     }
 
-    // PERSISTENCE STORAGE FIX: Key-Value pairs serialized down to disk via colon delimiter parsing formats
     private void saveInclusions() {
         StringBuilder sb = new StringBuilder();
         for (int id : includedItems) {
@@ -115,7 +133,6 @@ public class burthorpecalcplugin extends Plugin {
         config.setIncludedItemIds(sb.toString());
     }
 
-    // PERSISTENCE RECOVERY FIX: String splits extract sub-parameters out to populate both hash fields simultaneously
     private void loadInclusions() {
         includedItems.clear();
         forcedSellTiers.clear();
@@ -133,7 +150,6 @@ public class burthorpecalcplugin extends Plugin {
                         includedItems.add(itemId);
                         forcedSellTiers.put(itemId, tierValue);
                     } else {
-                        // Legacy support layer in case old data exists
                         int itemId = Integer.parseInt(entry.trim());
                         includedItems.add(itemId);
                         forcedSellTiers.put(itemId, SELL_AMOUNT_DEFAULT);
@@ -142,38 +158,60 @@ public class burthorpecalcplugin extends Plugin {
             }
         }
     }
-    public void updateBankTitleValue() {
-        Widget bankTitleWidget = client.getWidget(InterfaceID.Bankmain.TITLE);
-        if (bankTitleWidget == null || bankTitleWidget.isHidden()) {
-            return;
-        }
 
+    private void syncAllIncludedTags() {
+        if (configManager == null || includedItems.isEmpty()) return;
+        for (int id : includedItems) {
+            addShopscapeTag(id);
+        }
+    }
+    @Subscribe(priority = 1)
+    public void onScriptPreFired(ScriptPreFired event) {
+        if (event.getScriptId() == ScriptID.BANKMAIN_FINISHBUILDING) {
+            recomputePricesCache();
+        }
+    }
+
+    @Subscribe
+    public void onScriptPostFired(ScriptPostFired event) {
+        if (event.getScriptId() == ScriptID.BANKMAIN_FINISHBUILDING) {
+            updateBankTitleValue();
+        }
+    }
+
+    private void recomputePricesCache() {
         ItemContainer bankContainer = client.getItemContainer(95);
         ItemContainer invContainer = client.getItemContainer(93);
 
         long totalBankValue = calculateContainerValue(bankContainer);
         long totalInvValue = calculateContainerValue(invContainer);
 
+        String formattedShopStr = formatValue(totalBankValue);
+        String formattedInvStr = formatValue(totalInvValue);
+
+        cachedShopTextStr = " <col=ff981f>(SHOP: " + formattedShopStr + ") (INV: " + formattedInvStr + ")</col>";
+    }
+
+    public void updateBankTitleValue() {
+        Widget bankTitleWidget = client.getWidget(InterfaceID.Bankmain.TITLE);
+        if (bankTitleWidget == null || bankTitleWidget.isHidden() || cachedShopTextStr.isEmpty()) {
+            return;
+        }
+
         String nativeText = bankTitleWidget.getText();
         if (nativeText == null || nativeText.isEmpty()) {
             return;
         }
 
-        nativeText = nativeText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:[^)]+\\)\\s*\\(INV:[^)]+\\)</col>", "");
-        nativeText = nativeText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:[^<]+\\)</col>", "");
-        nativeText = nativeText.replaceAll("\\s*\\(SHOP:[^)]+\\)", "");
+        String cleanText = nativeText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:[^)]+\\)\\s*\\(INV:[^)]+\\)</col>", "");
+        cleanText = cleanText.replaceAll("\\s*<col=[0-9a-fA-F]+>\\(SHOP:[^<]+\\)</col>", "");
+        cleanText = cleanText.replaceAll("\\s*\\(SHOP:[^)]+\\)", "");
 
-        String formattedShopStr = formatValue(totalBankValue);
-        String formattedInvStr = formatValue(totalInvValue);
-
-        String replacementString = " <col=ff981f>(SHOP: " + formattedShopStr + ") (INV: " + formattedInvStr + ")</col>";
-        bankTitleWidget.setText(nativeText + replacementString);
+        bankTitleWidget.setText(cleanText + cachedShopTextStr);
     }
 
     private long calculateContainerValue(ItemContainer container) {
-        if (container == null) {
-            return 0;
-        }
+        if (container == null) return 0;
 
         long totalValue = 0;
         for (Item item : container.getItems()) {
@@ -221,13 +259,6 @@ public class burthorpecalcplugin extends Plugin {
         return String.valueOf(value);
     }
 
-    @Subscribe(priority = -2)
-    public void onScriptPostFired(ScriptPostFired event) {
-        if (event.getScriptId() == ScriptID.BANKMAIN_FINISHBUILDING) {
-            updateBankTitleValue();
-        }
-    }
-
     public long calculateProjectedShopYield(int itemId, int totalQty, int sellBatchSize) {
         if (!isItemIncluded(itemId)) return 0;
         ItemComposition comp = itemManager.getItemComposition(itemId);
@@ -264,14 +295,10 @@ public class burthorpecalcplugin extends Plugin {
         }
 
         MenuEntry entry = event.getMenuEntry();
-        if (entry == null) {
-            return;
-        }
+        if (entry == null) return;
 
         String option = event.getOption();
-        if (option == null) {
-            return;
-        }
+        if (option == null) return;
 
         int packedWidgetId = event.getActionParam1();
         int widgetGroupId = packedWidgetId >> 16;
@@ -279,6 +306,7 @@ public class burthorpecalcplugin extends Plugin {
         boolean isBankVaultItem = (widgetGroupId == 12) && option.equals("Examine");
         boolean isInventoryItem = (widgetGroupId != 12) && option.equals("Examine");
 
+        // CONFIGURATION TOGGLE FIXED: Evaluates config rules before building entries [source: 2]
         boolean bankAllowed = isBankVaultItem && config.shiftBankMenu();
         boolean inventoryAllowed = isInventoryItem && config.shiftInventoryMenu();
 
@@ -310,7 +338,6 @@ public class burthorpecalcplugin extends Plugin {
 
         boolean naturallyIncluded = isItemIncluded(itemId);
         if (!naturallyIncluded) {
-            // Temporary insertion map allocations to build contextual menu yields cleanly
             includedItems.add(itemId);
             forcedSellTiers.put(itemId, SELL_AMOUNT_DEFAULT);
         }
@@ -360,13 +387,19 @@ public class burthorpecalcplugin extends Plugin {
 
     private void handleForceSelection(int itemId, int quantity) {
         int canonicalId = itemManager.canonicalize(itemId);
-
-        // INTERACTION REGISTRATION FIX: Data mapped out ahead of the save configuration pipelines
         includedItems.add(canonicalId);
         forcedSellTiers.put(canonicalId, quantity);
-
         saveInclusions();
+
+        addShopscapeTag(canonicalId);
+        recomputePricesCache();
         updateBankTitleValue();
+
+        ConfigChanged fluentEvent = new ConfigChanged();
+        fluentEvent.setGroup("banktags");
+        fluentEvent.setKey("item_" + canonicalId);
+        fluentEvent.setNewValue("shopscape");
+        eventBus.post(fluentEvent);
     }
 
     @Subscribe
@@ -380,8 +413,51 @@ public class burthorpecalcplugin extends Plugin {
             includedItems.remove(itemId);
             forcedSellTiers.remove(itemId);
             saveInclusions();
+
+            removeShopscapeTag(itemId);
+            recomputePricesCache();
             updateBankTitleValue();
+
+            ConfigChanged fluentEvent = new ConfigChanged();
+            fluentEvent.setGroup("banktags");
+            fluentEvent.setKey("item_" + itemId);
+            fluentEvent.setOldValue("shopscape");
+            eventBus.post(fluentEvent);
             event.consume();
+        }
+    }
+
+    private void addShopscapeTag(int itemId) {
+        if (configManager == null) return;
+        String currentTags = configManager.getConfiguration("banktags", "item_" + itemId);
+        if (currentTags == null || currentTags.isEmpty()) {
+            configManager.setConfiguration("banktags", "item_" + itemId, "shopscape");
+        } else {
+            String cleanTags = currentTags.toLowerCase();
+            if (!cleanTags.contains("shopscape")) {
+                configManager.setConfiguration("banktags", "item_" + itemId, currentTags + ",shopscape");
+            }
+        }
+    }
+
+    private void removeShopscapeTag(int itemId) {
+        if (configManager == null) return;
+        String currentTags = configManager.getConfiguration("banktags", "item_" + itemId);
+        if (currentTags == null || currentTags.isEmpty()) return;
+
+        String[] tags = currentTags.split(",");
+        StringBuilder sb = new StringBuilder();
+        for (String tag : tags) {
+            if (!tag.trim().equalsIgnoreCase("shopscape")) {
+                if (sb.length() > 0) sb.append(",");
+                sb.append(tag.trim());
+            }
+        }
+
+        if (sb.length() == 0) {
+            configManager.unsetConfiguration("banktags", "item_" + itemId);
+        } else {
+            configManager.setConfiguration("banktags", "item_" + itemId, sb.toString());
         }
     }
 }
