@@ -4,7 +4,7 @@ A plugin for [RuneLite](https://github.com/runelite/runelite) which calculates a
 <img width="469" height="139" alt="image" src="https://github.com/user-attachments/assets/e3b77a35-0ba4-48ac-89ca-4c843464903c" />
 
 
-- Within the shop it will now be menu swapped [Other plugins menu swapping these items may override it.
+- Within the shop it will now be menu swapped [Other plugins menu swapping these items may override it.]
 <img width="220" height="109" alt="image" src="https://github.com/user-attachments/assets/14f4fe1e-8a14-428f-918b-a14d1c1f9060" />
 
 
