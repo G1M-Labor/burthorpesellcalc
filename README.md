@@ -27,5 +27,5 @@ A plugin for [RuneLite](https://github.com/runelite/runelite) which calculates a
 
 ## Current known issues:
 
-- Bank tag will not updates instantly when excluding an item, reopening the bank or switching between tabs to redraw the menu will show that its no longer in the "shopscape" tag.
+- Bank tag on layout mode causes you to have to disable then enable layout mode for it to update items you exclude / include. Recommended to not use when adding or   removing items. To do this right click the bank tab and disable layout.  
   
