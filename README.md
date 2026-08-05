@@ -2,10 +2,15 @@ A plugin for [RuneLite](https://github.com/runelite/runelite) which calculates a
 ## How to use:
 - Shift right click an item within the bank or inventory to show these options and simply select your desired sell quantity per world.
 <img width="469" height="139" alt="image" src="https://github.com/user-attachments/assets/e3b77a35-0ba4-48ac-89ca-4c843464903c" />
+
+
 - Within the shop it will now be menu swapped [Other plugins menu swapping these items may override it.
 <img width="220" height="109" alt="image" src="https://github.com/user-attachments/assets/14f4fe1e-8a14-428f-918b-a14d1c1f9060" />
+
+
 - Once you sell that item the left click will change to "Value" and stay like that until the shop no longer has that in stock.
 <img width="1038" height="461" alt="image" src="https://github.com/user-attachments/assets/0fb2ee29-6995-4258-9324-459627d1669f" />
+
 - For bank tag intergration create a bank tag called "shopscape", selected items will show in this bank tag.
 
 ## Features
