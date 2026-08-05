@@ -20,10 +20,10 @@ A plugin for [RuneLite](https://github.com/runelite/runelite) which calculates a
 - Shows both Bank total, Inventory Total displayed at the top of your bank GUI. 
 - Bank Tag intergration, creating a bank tag called "shopscape" will show all selected items within your bank for easy access.
 - Highlights bank to display selected items simply with colour codes for different sell quantities.
-    -The same highlight appears in the shop GUI displaying what to sell in that world
-    -Checks the shop stock to avoid selling items other than Sell - All when that world has that item within stock
-    -Additionally if the shop item goes away your items will rehighlight letting you know you can sell that again.
--Within config you can toggle, Shift right click options, and bank and shop highlights. A option between precise or rounded values displaying.
+    - The same highlight appears in the shop GUI displaying what to sell in that world
+    - Checks the shop stock to avoid selling items other than Sell - All when that world has that item within stock
+    - Additionally if the shop item goes away your items will rehighlight letting you know you can sell that again.
+- Within config you can toggle, Shift right click options, and bank and shop highlights. A option between precise or rounded values displaying.
 
 ## Current known issues:
 
